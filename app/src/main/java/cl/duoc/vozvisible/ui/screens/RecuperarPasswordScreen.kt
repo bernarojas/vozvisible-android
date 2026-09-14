@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,23 +47,32 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cl.duoc.vozvisible.data.RepositorioUsuarios
+import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
+import cl.duoc.vozvisible.util.esCorreoValido
 
 /**
  * Canales por los que el usuario puede recibir las instrucciones de recuperación.
  * La notificación visual se incluye porque es el canal accesible para el
  * público objetivo de la aplicación.
  */
-private val CANALES_RECUPERACION = listOf(
-    "Correo electrónico",
-    "Mensaje de texto (SMS)",
-    "Notificación visual en la app"
-)
+private enum class CanalRecuperacion(val titulo: String) {
+    CORREO("Correo electrónico"),
+    SMS("Mensaje de texto (SMS)"),
+    NOTIFICACION_VISUAL("Notificación visual en la app");
+
+    override fun toString(): String = titulo
+}
 
 /** Estados posibles del resultado de la búsqueda de la cuenta. */
 private sealed interface ResultadoRecuperacion {
     data object SinConsultar : ResultadoRecuperacion
-    data class Encontrado(val nombre: String, val canal: String) : ResultadoRecuperacion
+
+    data class Encontrado(
+        val usuario: Usuario,
+        val canal: CanalRecuperacion
+    ) : ResultadoRecuperacion
+
     data class NoEncontrado(val mensaje: String) : ResultadoRecuperacion
 }
 
@@ -80,10 +90,13 @@ private sealed interface ResultadoRecuperacion {
 fun RecuperarPasswordScreen(onVolver: () -> Unit) {
 
     var correo by rememberSaveable { mutableStateOf("") }
-    var canal by rememberSaveable { mutableStateOf(CANALES_RECUPERACION.first()) }
+    // El canal se guarda como ordinal para que la selección sobreviva a la
+    // rotación: un entero viaja en el Bundle del sistema sin conversiones.
+    var indiceCanal by rememberSaveable { mutableIntStateOf(0) }
     var resultado by remember {
         mutableStateOf<ResultadoRecuperacion>(ResultadoRecuperacion.SinConsultar)
     }
+    val canal = CanalRecuperacion.entries[indiceCanal]
 
     Scaffold(
         topBar = {
@@ -143,13 +156,13 @@ fun RecuperarPasswordScreen(onVolver: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            CANALES_RECUPERACION.forEach { opcion ->
+            CanalRecuperacion.entries.forEach { opcion ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .selectable(
                             selected = canal == opcion,
-                            onClick = { canal = opcion },
+                            onClick = { indiceCanal = opcion.ordinal },
                             role = Role.RadioButton
                         )
                         .heightIn(min = 56.dp),
@@ -157,7 +170,7 @@ fun RecuperarPasswordScreen(onVolver: () -> Unit) {
                 ) {
                     RadioButton(selected = canal == opcion, onClick = null)
                     Text(
-                        text = opcion,
+                        text = opcion.titulo,
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 8.dp)
                     )
@@ -181,9 +194,12 @@ fun RecuperarPasswordScreen(onVolver: () -> Unit) {
                 is ResultadoRecuperacion.Encontrado -> TarjetaResultado(
                     icono = Icons.Filled.CheckCircle,
                     titulo = "Instrucciones enviadas",
-                    detalle = "Hola ${actual.nombre}, enviamos las instrucciones de " +
-                        "recuperación por ${actual.canal.lowercase()}. Revisa tu bandeja " +
-                        "en los próximos minutos.",
+                    // El correo se muestra enmascarado: basta para que el usuario
+                    // reconozca su cuenta sin exponer la dirección completa.
+                    detalle = "Hola ${actual.usuario.primerNombre}, enviamos las " +
+                        "instrucciones de recuperación a ${actual.usuario.correoVisible} " +
+                        "por ${actual.canal.titulo.lowercase()}. Revisa tu bandeja en " +
+                        "los próximos minutos.",
                     colorContenedor = MaterialTheme.colorScheme.primaryContainer,
                     colorContenido = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -253,23 +269,22 @@ private fun TarjetaResultado(
  *
  * Se mantiene fuera del composable para poder cubrirla con tests unitarios.
  */
-private fun buscarCuenta(correo: String, canal: String): ResultadoRecuperacion = when {
+private fun buscarCuenta(correo: String, canal: CanalRecuperacion): ResultadoRecuperacion = when {
     correo.isBlank() ->
         ResultadoRecuperacion.NoEncontrado("Debes ingresar tu correo electrónico.")
 
-    !correo.contains("@") || !correo.substringAfterLast("@").contains(".") ->
+    !correo.esCorreoValido() ->
         ResultadoRecuperacion.NoEncontrado("El correo ingresado no es válido.")
 
-    else -> {
-        val usuario = RepositorioUsuarios.buscarPorCorreo(correo)
-        if (usuario != null) {
-            ResultadoRecuperacion.Encontrado(nombre = usuario.nombre, canal = canal)
-        } else {
-            ResultadoRecuperacion.NoEncontrado(
+    else ->
+        // El operador elvis encadena los dos desenlaces sin un if anidado:
+        // si la búsqueda entrega un usuario se construye Encontrado, y si
+        // devuelve null se toma la rama de la derecha.
+        RepositorioUsuarios.buscarPorCorreo(correo)
+            ?.let { usuario -> ResultadoRecuperacion.Encontrado(usuario, canal) }
+            ?: ResultadoRecuperacion.NoEncontrado(
                 "No encontramos ninguna cuenta registrada con ${correo.trim()}."
             )
-        }
-    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)

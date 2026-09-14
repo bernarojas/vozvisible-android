@@ -42,20 +42,53 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cl.duoc.vozvisible.data.RepositorioUsuarios
+import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
+import cl.duoc.vozvisible.util.esCorreoValido
+
+/** Campo del formulario que se resalta cuando el acceso es rechazado. */
+private enum class CampoAcceso { CORREO, PASSWORD, AMBOS }
 
 /**
- * Resultado de validar el formulario de acceso.
+ * Desenlace del intento de acceso.
  *
- * Se distingue qué campo provocó el error para resaltar únicamente ese campo,
- * en lugar de marcar todo el formulario en rojo.
+ * La interfaz declara las tres propiedades que consume la view y cada subtipo
+ * decide su valor. Así el composable no pregunta de qué caso se trata: lee
+ * `mensaje`, `errorCorreo` y `errorPassword` sin ramificar.
  */
-private data class ValidacionAcceso(
-    val mensaje: String = "",
-    val errorCorreo: Boolean = false,
-    val errorPassword: Boolean = false
-) {
-    val esValido: Boolean get() = mensaje.isEmpty()
+private sealed interface ResultadoAcceso {
+
+    val mensaje: String
+    val errorCorreo: Boolean
+    val errorPassword: Boolean
+
+    /** Todavía no se ha pulsado Ingresar, o el usuario está editando el formulario. */
+    data object Pendiente : ResultadoAcceso {
+        override val mensaje: String = ""
+        override val errorCorreo: Boolean = false
+        override val errorPassword: Boolean = false
+    }
+
+    /** Las credenciales coinciden con un usuario del arreglo. */
+    data class Autenticado(val usuario: Usuario) : ResultadoAcceso {
+        override val mensaje: String = ""
+        override val errorCorreo: Boolean = false
+        override val errorPassword: Boolean = false
+    }
+
+    /**
+     * El acceso fue denegado.
+     *
+     * Se guarda qué campo lo provocó para resaltar únicamente ese campo, en
+     * lugar de marcar todo el formulario en rojo.
+     */
+    data class Rechazado(
+        override val mensaje: String,
+        val campo: CampoAcceso
+    ) : ResultadoAcceso {
+        override val errorCorreo: Boolean get() = campo != CampoAcceso.PASSWORD
+        override val errorPassword: Boolean get() = campo != CampoAcceso.CORREO
+    }
 }
 
 /**
@@ -80,7 +113,7 @@ fun LoginScreen(
     var verPassword by rememberSaveable { mutableStateOf(false) }
     // Aquí sí se usa remember y no rememberSaveable: el resultado de la validación
     // es feedback momentáneo, no un dato que deba sobrevivir a la rotación.
-    var validacion by remember { mutableStateOf(ValidacionAcceso()) }
+    var resultado by remember { mutableStateOf<ResultadoAcceso>(ResultadoAcceso.Pendiente) }
 
     Column(
         modifier = Modifier
@@ -120,7 +153,7 @@ fun LoginScreen(
                     value = correo,
                     onValueChange = {
                         correo = it
-                        validacion = ValidacionAcceso()
+                        resultado = ResultadoAcceso.Pendiente
                     },
                     label = { Text("Correo electrónico") },
                     placeholder = { Text("nombre@correo.cl") },
@@ -128,7 +161,7 @@ fun LoginScreen(
                         Icon(Icons.Filled.Email, contentDescription = "Icono de correo")
                     },
                     singleLine = true,
-                    isError = validacion.errorCorreo,
+                    isError = resultado.errorCorreo,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         capitalization = KeyboardCapitalization.None
@@ -142,7 +175,7 @@ fun LoginScreen(
                     value = password,
                     onValueChange = {
                         password = it
-                        validacion = ValidacionAcceso()
+                        resultado = ResultadoAcceso.Pendiente
                     },
                     label = { Text("Contraseña") },
                     leadingIcon = {
@@ -161,7 +194,7 @@ fun LoginScreen(
                     visualTransformation = if (verPassword) VisualTransformation.None
                     else PasswordVisualTransformation(),
                     singleLine = true,
-                    isError = validacion.errorPassword,
+                    isError = resultado.errorPassword,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -169,7 +202,7 @@ fun LoginScreen(
                 // El espacio se reserva siempre para que el formulario no salte
                 // verticalmente cuando aparece o desaparece el mensaje de error.
                 Text(
-                    text = validacion.mensaje,
+                    text = resultado.mensaje,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
@@ -180,8 +213,13 @@ fun LoginScreen(
 
                 Button(
                     onClick = {
-                        validacion = validarAcceso(correo, password)
-                        if (validacion.esValido) onLoginExitoso(correo.trim())
+                        val intento = validarAcceso(correo, password)
+                        resultado = intento
+                        // El smart cast permite leer `intento.usuario` sin volver
+                        // a consultar el arreglo ni convertir el tipo a mano.
+                        if (intento is ResultadoAcceso.Autenticado) {
+                            onLoginExitoso(intento.usuario.correoNormalizado)
+                        }
                     },
                     // Altura mínima de 56dp: objetivo táctil cómodo, criterio de accesibilidad.
                     modifier = Modifier
@@ -213,6 +251,15 @@ fun LoginScreen(
                 Text("Crear cuenta", fontWeight = FontWeight.Bold)
             }
         }
+
+        // El arreglo llega con usuarios ya cargados: se indica en pantalla para
+        // que la aplicación pueda probarse sin registrar una cuenta primero.
+        Text(
+            text = "${RepositorioUsuarios.total} cuentas disponibles en el arreglo de usuarios",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -222,30 +269,24 @@ fun LoginScreen(
  * Se separa de la función composable para poder probarla con tests unitarios
  * sin necesidad de levantar la interfaz.
  */
-private fun validarAcceso(correo: String, password: String): ValidacionAcceso = when {
+private fun validarAcceso(correo: String, password: String): ResultadoAcceso = when {
     correo.isBlank() ->
-        ValidacionAcceso("Debes ingresar tu correo electrónico.", errorCorreo = true)
+        ResultadoAcceso.Rechazado("Debes ingresar tu correo electrónico.", CampoAcceso.CORREO)
 
-    !correo.contains("@") || !correo.substringAfterLast("@").contains(".") ->
-        ValidacionAcceso("El correo ingresado no es válido.", errorCorreo = true)
+    !correo.esCorreoValido() ->
+        ResultadoAcceso.Rechazado("El correo ingresado no es válido.", CampoAcceso.CORREO)
 
     password.isBlank() ->
-        ValidacionAcceso("Debes ingresar tu contraseña.", errorPassword = true)
+        ResultadoAcceso.Rechazado("Debes ingresar tu contraseña.", CampoAcceso.PASSWORD)
 
-    RepositorioUsuarios.lista.isEmpty() ->
-        ValidacionAcceso(
-            "Aún no hay usuarios registrados. Crea una cuenta primero.",
-            errorCorreo = true
-        )
+    else -> {
+        // autenticar devuelve el propio usuario, de modo que una sola pasada por
+        // el arreglo resuelve la validación y entrega el dato que necesita Inicio.
+        val usuario = RepositorioUsuarios.autenticar(correo, password)
 
-    !RepositorioUsuarios.credencialesValidas(correo, password) ->
-        ValidacionAcceso(
-            "Correo o contraseña incorrectos.",
-            errorCorreo = true,
-            errorPassword = true
-        )
-
-    else -> ValidacionAcceso()
+        usuario?.let { ResultadoAcceso.Autenticado(it) }
+            ?: ResultadoAcceso.Rechazado("Correo o contraseña incorrectos.", CampoAcceso.AMBOS)
+    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)
