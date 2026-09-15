@@ -1,7 +1,7 @@
 # VozVisible
 
 Aplicación móvil Android de accesibilidad para personas con discapacidad sensorial auditiva.
-Facilita la comunicación cotidiana —escribir y hablar— convirtiendo el dispositivo móvil en
+Facilita la comunicación cotidiana (escribir y hablar) convirtiendo el dispositivo móvil en
 una herramienta que integra al usuario con su entorno real y digital.
 
 ## Contexto académico
@@ -10,7 +10,7 @@ una herramienta que integra al usuario con su entorno real y digital.
 |---|---|
 | **Asignatura** | Desarrollo de Aplicaciones Móviles (DSY2204) |
 | **Institución** | Duoc UC |
-| **Entrega** | Sumativa 2 — Semana 5 |
+| **Entrega** | Sumativa 2 (Semana 5) |
 | **Alcance** | Integración del lenguaje Kotlin: funciones, colecciones y arreglo de usuarios |
 
 ## Estado de la entrega
@@ -34,13 +34,13 @@ la pantalla de inicio las presenta como accesos aún no operativos.
 
 ### Componentes de Material Design y Jetpack Compose
 
-- `OutlinedTextField` — campos de entrada con validación e indicación de error
-- `ExposedDropdownMenuBox` — combo box de selección de región
-- `RadioButton` — selección excluyente del modo de comunicación preferido
-- `Checkbox` — check list de apoyos de accesibilidad y aceptación de términos
-- `LazyColumn` — tabla de usuarios registrados
-- `LazyVerticalGrid` — grilla de funciones en la pantalla de inicio
-- `LinearProgressIndicator` — barras del resumen de apoyos más solicitados
+- `OutlinedTextField`: campos de entrada con validación e indicación de error
+- `ExposedDropdownMenuBox`: combo box de selección de región
+- `RadioButton`: selección excluyente del modo de comunicación preferido
+- `Checkbox`: check list de apoyos de accesibilidad y aceptación de términos
+- `LazyColumn`: tabla de usuarios registrados
+- `LazyVerticalGrid`: grilla de funciones en la pantalla de inicio
+- `LinearProgressIndicator`: barras del resumen de apoyos más solicitados
 - `Button`, `TextButton`, `Card`, `TopAppBar`, `Snackbar`, `Surface`, `Icon`
 
 ## Arquitectura
