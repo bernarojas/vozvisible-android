@@ -57,6 +57,7 @@ import cl.duoc.vozvisible.data.Region
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.ResultadoRegistro
 import cl.duoc.vozvisible.data.Usuario
+import cl.duoc.vozvisible.data.resumen
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 import cl.duoc.vozvisible.util.LARGO_MINIMO_PASSWORD
 import cl.duoc.vozvisible.util.esCorreoValido
@@ -532,7 +533,7 @@ private fun FilaUsuarioTabla(usuario: Usuario) {
             )
         }
         Text(
-            text = "${usuario.modoPreferido.titulo} · ${usuario.apoyosComoTexto()}",
+            text = usuario.resumen,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp)

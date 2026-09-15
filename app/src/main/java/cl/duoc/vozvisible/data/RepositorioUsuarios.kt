@@ -137,22 +137,32 @@ object RepositorioUsuarios {
      *
      * Es una función de orden superior: recibe otra función como parámetro, lo
      * que evita escribir un método distinto por cada filtro posible.
+     *
+     * Se declara inline para que el compilador copie el cuerpo de la lambda en
+     * el lugar de la llamada, en vez de crear un objeto de función por cada
+     * invocación. Por eso opera sobre la vista pública y no sobre el arreglo
+     * privado: una función inline pública no puede acceder a miembros privados,
+     * porque su cuerpo termina incrustado en código externo.
      */
-    fun filtrar(criterio: (Usuario) -> Boolean): List<Usuario> = usuarios.filter(criterio)
+    inline fun filtrar(criterio: (Usuario) -> Boolean): List<Usuario> = lista.filter(criterio)
 
     /**
      * Ordena el arreglo según la clave que devuelva el selector.
      *
      * Es genérica en el tipo de la clave, con la restricción de que sea
      * comparable: sirve igual para ordenar por nombre, por región o por la
-     * cantidad de apoyos marcados.
+     * cantidad de apoyos marcados. También es inline, por el mismo motivo.
+     *
+     * El selector lleva crossinline porque no se invoca directamente aquí, sino
+     * que se entrega a sortedBy: eso impide que la lambda use un return que
+     * salga de la función que la escribió.
      */
-    fun <C : Comparable<C>> ordenadosPor(
+    inline fun <C : Comparable<C>> ordenadosPor(
         descendente: Boolean = false,
-        selector: (Usuario) -> C
+        crossinline selector: (Usuario) -> C
     ): List<Usuario> =
-        if (descendente) usuarios.sortedByDescending(selector)
-        else usuarios.sortedBy(selector)
+        if (descendente) lista.sortedByDescending(selector)
+        else lista.sortedBy(selector)
 
     /** Usuarios de una región, ordenados alfabéticamente. */
     fun deRegion(region: Region): List<Usuario> =

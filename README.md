@@ -97,7 +97,8 @@ Credenciales de los usuarios precargados:
 | `data class` con `copy` y desestructuración | `Usuario`, `EstadisticasUsuarios`, `FuncionApp` |
 | Propiedades calculadas (`get()`) | `Usuario.iniciales`, `Region.zona`, `RepositorioUsuarios.cuposDisponibles` |
 | Funciones de extensión | `String.esCorreoValido()`, `Iterable<Usuario>.buscarCorreo()` |
-| Funciones de orden superior y genéricas | `RepositorioUsuarios.filtrar()`, `ordenadosPor()` |
+| Propiedades de extensión | `Usuario.resumen`, declarada fuera de la data class |
+| Funciones de orden superior, genéricas e `inline` | `RepositorioUsuarios.filtrar()`, `ordenadosPor()` con `crossinline` |
 | Parámetros con nombre y valor por defecto | `Usuario.desdeFormulario()`, `apoyosComoTexto()` |
 | Null-safety: `?.`, `?:`, `let`, smart cast | Validación de acceso y resolución del usuario en Inicio |
 | Colecciones: `filter`, `map`, `flatMap`, `groupingBy`, `associateBy`, `sortedWith`, `average`, `take` | `EstadisticasUsuarios.calcular()`, `RepositorioUsuarios` |
@@ -139,7 +140,7 @@ recuperación muestran el correo enmascarado.
 
 ## Pruebas
 
-La lógica de dominio está cubierta por 36 tests unitarios que se ejecutan en la JVM:
+La lógica de dominio está cubierta por 37 tests unitarios que se ejecutan en la JVM:
 
 ```
 app/src/test/java/cl/duoc/vozvisible/

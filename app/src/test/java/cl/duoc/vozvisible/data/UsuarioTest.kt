@@ -73,6 +73,20 @@ class UsuarioTest {
     }
 
     @Test
+    fun `la propiedad de extension resume modo y apoyos`() {
+        assertEquals(
+            "Voz a texto · Alertas vibratorias, Subtítulos automáticos",
+            camila.resumen
+        )
+
+        val sinApoyos = camila.copy(
+            modoPreferido = ModoComunicacion.AMBOS,
+            preferencias = emptySet()
+        )
+        assertEquals("Ambos modos · Sin apoyos", sinApoyos.resumen)
+    }
+
+    @Test
     fun `expone el dominio del correo`() {
         assertEquals("duocuc.cl", camila.dominioCorreo)
     }

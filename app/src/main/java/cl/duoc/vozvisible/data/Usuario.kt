@@ -109,3 +109,15 @@ data class Usuario(
         )
     }
 }
+
+/**
+ * Resumen en una línea de las preferencias declaradas por el usuario.
+ *
+ * Es una propiedad de extensión: se declara fuera de la clase y el compilador
+ * la resuelve como si fuera un miembro más, pero sin ocupar espacio en el
+ * objeto ni formar parte del constructor. Se elige esta forma porque el
+ * formato del texto es una decisión de presentación, no un dato del modelo:
+ * puede cambiar sin tocar la data class ni las pruebas que la cubren.
+ */
+val Usuario.resumen: String
+    get() = "${modoPreferido.titulo} · ${apoyosComoTexto()}"
