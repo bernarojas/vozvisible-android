@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "393028277015",
+    "project_id": "vozvisible-84435",
+    "storage_bucket": "vozvisible-84435.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:393028277015:android:b841bd7fb76901763fdd52",
+        "android_client_info": {
+          "package_name": "cl.duoc.vozvisible"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKiPprKK_F9vBlPz8yi5_F7dbi6jq8F4s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
