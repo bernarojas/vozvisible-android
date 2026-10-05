@@ -86,6 +86,79 @@ object RepositorioUsuarios {
 
     private val usuarios = mutableStateListOf(*USUARIOS_INICIALES)
 
+    /**
+     * Almacén remoto, cuando la aplicación está conectada.
+     *
+     * Es nulo en las pruebas unitarias, que trabajan solo contra el arreglo en
+     * memoria: así la suite corre en la máquina virtual de Java sin red.
+     */
+    private var fuente: FuenteUsuarios? = null
+
+    /** Indica si el repositorio tiene un almacén remoto detrás. */
+    val estaConectado: Boolean get() = fuente != null
+
+    /** Asocia el almacén remoto. Se invoca una sola vez al arrancar la app. */
+    fun conectar(almacen: FuenteUsuarios) {
+        fuente = almacen
+    }
+
+    /**
+     * Trae los perfiles del almacén remoto y reemplaza con ellos el arreglo.
+     *
+     * Si la colección está vacía, la siembra con los cinco usuarios iniciales:
+     * de ese modo la primera ejecución deja datos con los que trabajar y las
+     * siguientes respetan lo que haya en el servidor.
+     *
+     * @return true si la sincronización se completó.
+     */
+    suspend fun sincronizar(): Boolean {
+        val almacen = fuente ?: return false
+
+        return runCatching {
+            val almacenados = almacen.cargarTodos()
+
+            if (almacenados.isEmpty()) {
+                USUARIOS_INICIALES.forEach { inicial -> almacen.guardar(inicial) }
+            } else {
+                usuarios.clear()
+                usuarios.addAll(almacenados)
+            }
+            true
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Registra al usuario y lo propaga al almacén remoto.
+     *
+     * La validación de cupo y de correo duplicado sigue viviendo en [registrar]:
+     * aquí solo se añade la escritura remota cuando el alta local prosperó.
+     */
+    suspend fun registrarEnAlmacen(usuario: Usuario): ResultadoRegistro {
+        val resultado = registrar(usuario)
+        if (resultado.fueExitoso) {
+            runCatching { fuente?.guardar(usuario) }
+        }
+        return resultado
+    }
+
+    /** Modifica al usuario y propaga el cambio al almacén remoto. */
+    suspend fun actualizarEnAlmacen(correoOriginal: String, datosNuevos: Usuario): ResultadoEdicion {
+        val resultado = actualizar(correoOriginal, datosNuevos)
+        if (resultado.fueExitoso) {
+            runCatching { fuente?.actualizar(correoOriginal, datosNuevos) }
+        }
+        return resultado
+    }
+
+    /** Elimina al usuario y propaga el borrado al almacén remoto. */
+    suspend fun eliminarDelAlmacen(correo: String): ResultadoEdicion {
+        val resultado = eliminar(correo)
+        if (resultado.fueExitoso) {
+            runCatching { fuente?.eliminar(correo) }
+        }
+        return resultado
+    }
+
     /** Vista de solo lectura del arreglo: las views leen, pero no modifican. */
     val lista: List<Usuario> get() = usuarios
 

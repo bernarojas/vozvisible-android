@@ -1,6 +1,7 @@
 package cl.duoc.vozvisible.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
@@ -8,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.SesionUsuario
 import cl.duoc.vozvisible.ui.screens.InicioScreen
 import cl.duoc.vozvisible.ui.screens.LoginScreen
@@ -39,6 +41,11 @@ fun NavegacionApp() {
         ?.takeIf { correo -> correo.isNotBlank() }
         ?.let { correo -> Rutas.inicioDe(correo) }
         ?: Rutas.LOGIN
+
+    // Se trae el contenido del almacén remoto una vez por arranque. Si falla,
+    // por falta de red o de permisos, el arreglo precargado sigue sirviendo y
+    // la aplicación continúa operativa.
+    LaunchedEffect(Unit) { RepositorioUsuarios.sincronizar() }
 
     NavHost(
         navController = navController,

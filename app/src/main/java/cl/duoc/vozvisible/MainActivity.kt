@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import cl.duoc.vozvisible.data.FuenteFirestore
+import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.navigation.NavegacionApp
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 
@@ -20,6 +22,12 @@ import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // El almacen remoto se asocia una sola vez, al crear la Activity. El
+        // repositorio queda igual de utilizable sin el, que es como corren las
+        // pruebas unitarias.
+        RepositorioUsuarios.conectar(FuenteFirestore())
+
         enableEdgeToEdge()
         setContent {
             VozVisibleTheme {
