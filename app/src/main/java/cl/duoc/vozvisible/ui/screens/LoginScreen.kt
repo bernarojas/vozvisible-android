@@ -97,13 +97,13 @@ private sealed interface ResultadoAcceso {
  * No recibe el NavController: notifica los eventos hacia arriba mediante lambdas,
  * de modo que la view no depende de la navegación y puede previsualizarse aislada.
  *
- * @param onLoginExitoso se invoca con el correo autenticado cuando las credenciales son válidas.
+ * @param onLoginExitoso se invoca con el usuario autenticado cuando las credenciales son válidas.
  * @param onIrARegistro se invoca al pulsar el vínculo "Crear cuenta".
  * @param onIrARecuperar se invoca al pulsar el vínculo de recuperación.
  */
 @Composable
 fun LoginScreen(
-    onLoginExitoso: (String) -> Unit,
+    onLoginExitoso: (Usuario) -> Unit,
     onIrARegistro: () -> Unit,
     onIrARecuperar: () -> Unit
 ) {
@@ -218,7 +218,7 @@ fun LoginScreen(
                         // El smart cast permite leer `intento.usuario` sin volver
                         // a consultar el arreglo ni convertir el tipo a mano.
                         if (intento is ResultadoAcceso.Autenticado) {
-                            onLoginExitoso(intento.usuario.correoNormalizado)
+                            onLoginExitoso(intento.usuario)
                         }
                     },
                     // Altura mínima de 56dp: objetivo táctil cómodo, criterio de accesibilidad.
