@@ -9,3 +9,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firma del APK: la clave y su contraseña no se publican.
+*.jks
+keystore.properties
