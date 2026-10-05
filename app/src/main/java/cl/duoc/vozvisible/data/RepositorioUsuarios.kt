@@ -133,6 +133,44 @@ object RepositorioUsuarios {
         usuarios.firstOrNull { usuario -> usuario.correspondeA(correo) }
 
     /**
+     * Modifica los datos de una cuenta existente.
+     *
+     * Se recibe por separado el correo original y el usuario con los datos
+     * nuevos, porque el correo es la clave de la cuenta y la edición puede
+     * cambiarlo. Antes de guardar se comprueba que el correo nuevo no esté
+     * tomado por otra cuenta distinta de la que se está editando.
+     *
+     * @param correoOriginal correo con el que la cuenta está almacenada.
+     * @param datosNuevos usuario con los valores ya normalizados.
+     */
+    fun actualizar(correoOriginal: String, datosNuevos: Usuario): ResultadoEdicion {
+        val posicion = usuarios.indexOfFirst { usuario -> usuario.correspondeA(correoOriginal) }
+        if (posicion < 0) return ResultadoEdicion.NoEncontrado(correoOriginal.normalizado())
+
+        val cambioDeCorreo = !datosNuevos.correspondeA(correoOriginal)
+        if (cambioDeCorreo && correoRegistrado(datosNuevos.correo)) {
+            return ResultadoEdicion.CorreoEnUso(datosNuevos.correoNormalizado)
+        }
+
+        usuarios[posicion] = datosNuevos
+        return ResultadoEdicion.Actualizado(datosNuevos)
+    }
+
+    /**
+     * Elimina del arreglo la cuenta asociada al correo.
+     *
+     * Libera un cupo, de modo que la view de Registro vuelve a admitir altas
+     * cuando el arreglo estaba lleno.
+     */
+    fun eliminar(correo: String): ResultadoEdicion {
+        val objetivo = usuarios.firstOrNull { usuario -> usuario.correspondeA(correo) }
+            ?: return ResultadoEdicion.NoEncontrado(correo.normalizado())
+
+        usuarios.remove(objetivo)
+        return ResultadoEdicion.Eliminado(objetivo.correoNormalizado)
+    }
+
+    /**
      * Filtra el arreglo con el criterio que entregue quien llama.
      *
      * Es una función de orden superior: recibe otra función como parámetro, lo
