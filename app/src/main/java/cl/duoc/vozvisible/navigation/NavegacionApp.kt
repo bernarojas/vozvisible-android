@@ -3,6 +3,7 @@ package cl.duoc.vozvisible.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -13,6 +14,7 @@ import cl.duoc.vozvisible.data.AutenticacionFirebase
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.SesionUsuario
 import cl.duoc.vozvisible.ui.screens.InicioScreen
+import kotlinx.coroutines.launch
 import cl.duoc.vozvisible.ui.screens.LoginScreen
 import cl.duoc.vozvisible.ui.screens.PerfilScreen
 import cl.duoc.vozvisible.ui.screens.RecuperarPasswordScreen
@@ -33,6 +35,7 @@ import cl.duoc.vozvisible.ui.screens.RegistroScreen
 fun NavegacionApp() {
     val navController = rememberNavController()
     val contexto = LocalContext.current
+    val alcance = rememberCoroutineScope()
 
     // remember con el contexto como clave: la sesión se abre una sola vez y no
     // se vuelve a leer de disco en cada recomposición.
@@ -47,7 +50,13 @@ fun NavegacionApp() {
     // por falta de red o de permisos, el arreglo precargado sigue sirviendo y
     // la aplicación continúa operativa.
     val auth = remember { AutenticacionFirebase() }
-    LaunchedEffect(Unit) { RepositorioUsuarios.sincronizar(auth) }
+
+    // La siembra corre una vez por arranque y es idempotente. La lectura solo
+    // se intenta si ya hay sesión, porque las reglas de Firestore la exigen.
+    LaunchedEffect(Unit) {
+        RepositorioUsuarios.sembrar(auth)
+        if (auth.haySesion) RepositorioUsuarios.sincronizar()
+    }
 
     NavHost(
         navController = navController,
@@ -56,6 +65,10 @@ fun NavegacionApp() {
         composable(Rutas.LOGIN) {
             LoginScreen(
                 onLoginExitoso = { usuario ->
+                    // Recién ahora hay sesión en Firebase, así que las reglas
+                    // permiten leer: es el momento de traerse los perfiles.
+                    alcance.launch { RepositorioUsuarios.sincronizar() }
+
                     // La sesión se guarda antes de navegar: si la aplicación se
                     // cierra en Inicio, al reabrirla vuelve ahí directamente.
                     sesion.abrir(usuario)

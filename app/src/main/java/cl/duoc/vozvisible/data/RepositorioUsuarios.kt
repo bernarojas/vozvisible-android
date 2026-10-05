@@ -111,16 +111,12 @@ object RepositorioUsuarios {
      *
      * @return true si la sincronización se completó.
      */
-    suspend fun sincronizar(auth: AutenticacionFirebase? = null): Boolean {
+    suspend fun sincronizar(): Boolean {
         val almacen = fuente ?: return false
 
         return runCatching {
             val almacenados = almacen.cargarTodos()
-
-            if (almacenados.isEmpty()) {
-                USUARIOS_INICIALES.forEach { inicial -> almacen.guardar(inicial) }
-                auth?.let { servicio -> sembrarCredenciales(servicio) }
-            } else {
+            if (almacenados.isNotEmpty()) {
                 usuarios.clear()
                 usuarios.addAll(almacenados)
             }
@@ -129,22 +125,38 @@ object RepositorioUsuarios {
     }
 
     /**
-     * Da de alta en el servicio de autenticación las credenciales de los
-     * usuarios iniciales.
+     * Siembra los usuarios iniciales en los dos servicios, si aún no están.
      *
-     * Sin esto, los cinco perfiles sembrados existirían en la base de datos
-     * pero nadie podría entrar con ellos: Firestore guarda el perfil y
-     * Authentication, la credencial, y son dos almacenes distintos.
+     * El orden importa y no es el intuitivo. Las reglas de Firestore exigen
+     * sesión iniciada, de modo que no se puede escribir el perfil antes de
+     * tener una credencial. Pero crear una credencial deja precisamente esa
+     * sesión abierta, así que la siembra se apoya en ese efecto: primero las
+     * cuentas en Authentication y, con la sesión que queda viva, los perfiles
+     * en Firestore.
      *
-     * Crear una cuenta deja la sesión abierta con ella, así que al terminar se
-     * cierra para que la aplicación vuelva a su estado inicial. Los correos ya
-     * existentes fallan y se ignoran, lo que hace la operación repetible.
+     * Es idempotente: en los arranques siguientes los correos ya existen, cada
+     * alta falla sin consecuencias y no se vuelve a escribir nada.
+     *
+     * @return true si esta ejecución creó datos.
      */
-    private suspend fun sembrarCredenciales(auth: AutenticacionFirebase) {
-        USUARIOS_INICIALES.forEach { inicial ->
-            runCatching { auth.registrar(inicial.correo, inicial.password) }
+    suspend fun sembrar(auth: AutenticacionFirebase): Boolean {
+        val almacen = fuente ?: return false
+
+        // Se evalúan todas las altas antes de decidir: `any` cortaría en la
+        // primera que prospere y dejaría sin crear al resto de las cuentas.
+        val altas = USUARIOS_INICIALES.map { inicial ->
+            auth.registrar(inicial.correo, inicial.password).fueExitoso
+        }
+
+        if (altas.none { creada -> creada }) return false
+
+        // La última cuenta creada dejó la sesión abierta: se aprovecha para
+        // escribir los perfiles antes de cerrarla.
+        runCatching {
+            USUARIOS_INICIALES.forEach { inicial -> almacen.guardar(inicial) }
         }
         auth.cerrarSesion()
+        return true
     }
 
     /**
