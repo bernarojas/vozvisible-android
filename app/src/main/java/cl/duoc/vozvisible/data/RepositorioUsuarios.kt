@@ -111,7 +111,7 @@ object RepositorioUsuarios {
      *
      * @return true si la sincronización se completó.
      */
-    suspend fun sincronizar(): Boolean {
+    suspend fun sincronizar(auth: AutenticacionFirebase? = null): Boolean {
         val almacen = fuente ?: return false
 
         return runCatching {
@@ -119,12 +119,32 @@ object RepositorioUsuarios {
 
             if (almacenados.isEmpty()) {
                 USUARIOS_INICIALES.forEach { inicial -> almacen.guardar(inicial) }
+                auth?.let { servicio -> sembrarCredenciales(servicio) }
             } else {
                 usuarios.clear()
                 usuarios.addAll(almacenados)
             }
             true
         }.getOrDefault(false)
+    }
+
+    /**
+     * Da de alta en el servicio de autenticación las credenciales de los
+     * usuarios iniciales.
+     *
+     * Sin esto, los cinco perfiles sembrados existirían en la base de datos
+     * pero nadie podría entrar con ellos: Firestore guarda el perfil y
+     * Authentication, la credencial, y son dos almacenes distintos.
+     *
+     * Crear una cuenta deja la sesión abierta con ella, así que al terminar se
+     * cierra para que la aplicación vuelva a su estado inicial. Los correos ya
+     * existentes fallan y se ignoran, lo que hace la operación repetible.
+     */
+    private suspend fun sembrarCredenciales(auth: AutenticacionFirebase) {
+        USUARIOS_INICIALES.forEach { inicial ->
+            runCatching { auth.registrar(inicial.correo, inicial.password) }
+        }
+        auth.cerrarSesion()
     }
 
     /**

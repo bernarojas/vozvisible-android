@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import cl.duoc.vozvisible.data.AutenticacionFirebase
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.SesionUsuario
 import cl.duoc.vozvisible.ui.screens.InicioScreen
@@ -45,7 +46,8 @@ fun NavegacionApp() {
     // Se trae el contenido del almacén remoto una vez por arranque. Si falla,
     // por falta de red o de permisos, el arreglo precargado sigue sirviendo y
     // la aplicación continúa operativa.
-    LaunchedEffect(Unit) { RepositorioUsuarios.sincronizar() }
+    val auth = remember { AutenticacionFirebase() }
+    LaunchedEffect(Unit) { RepositorioUsuarios.sincronizar(auth) }
 
     NavHost(
         navController = navController,

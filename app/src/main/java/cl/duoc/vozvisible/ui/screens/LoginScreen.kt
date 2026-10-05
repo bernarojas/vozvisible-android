@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,10 +42,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cl.duoc.vozvisible.data.AutenticacionFirebase
+import cl.duoc.vozvisible.data.ModoComunicacion
+import cl.duoc.vozvisible.data.Region
 import cl.duoc.vozvisible.data.RepositorioUsuarios
+import cl.duoc.vozvisible.data.ResultadoAuth
 import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 import cl.duoc.vozvisible.util.esCorreoValido
+import kotlinx.coroutines.launch
 
 /** Campo del formulario que se resalta cuando el acceso es rechazado. */
 private enum class CampoAcceso { CORREO, PASSWORD, AMBOS }
@@ -114,6 +120,10 @@ fun LoginScreen(
     // Aquí sí se usa remember y no rememberSaveable: el resultado de la validación
     // es feedback momentáneo, no un dato que deba sobrevivir a la rotación.
     var resultado by remember { mutableStateOf<ResultadoAcceso>(ResultadoAcceso.Pendiente) }
+    var verificando by remember { mutableStateOf(false) }
+
+    val alcance = rememberCoroutineScope()
+    val auth = remember { AutenticacionFirebase() }
 
     Column(
         modifier = Modifier
@@ -212,13 +222,20 @@ fun LoginScreen(
                 )
 
                 Button(
+                    enabled = !verificando,
                     onClick = {
-                        val intento = validarAcceso(correo, password)
-                        resultado = intento
-                        // El smart cast permite leer `intento.usuario` sin volver
-                        // a consultar el arreglo ni convertir el tipo a mano.
-                        if (intento is ResultadoAcceso.Autenticado) {
-                            onLoginExitoso(intento.usuario)
+                        // La consulta al servicio es una operación de red: se
+                        // lanza en una corrutina para no bloquear la interfaz.
+                        alcance.launch {
+                            verificando = true
+                            val intento = validarAcceso(auth, correo, password)
+                            verificando = false
+                            resultado = intento
+                            // El smart cast permite leer `intento.usuario` sin
+                            // volver a consultar ni convertir el tipo a mano.
+                            if (intento is ResultadoAcceso.Autenticado) {
+                                onLoginExitoso(intento.usuario)
+                            }
                         }
                     },
                     // Altura mínima de 56dp: objetivo táctil cómodo, criterio de accesibilidad.
@@ -226,7 +243,10 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
                 ) {
-                    Text("Ingresar", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (verificando) "Verificando…" else "Ingresar",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
 
                 Spacer(Modifier.height(4.dp))
@@ -269,7 +289,7 @@ fun LoginScreen(
  * Se separa de la función composable para poder probarla con tests unitarios
  * sin necesidad de levantar la interfaz.
  */
-private fun validarAcceso(correo: String, password: String): ResultadoAcceso = when {
+private fun validarFormato(correo: String, password: String): ResultadoAcceso? = when {
     correo.isBlank() ->
         ResultadoAcceso.Rechazado("Debes ingresar tu correo electrónico.", CampoAcceso.CORREO)
 
@@ -279,13 +299,44 @@ private fun validarAcceso(correo: String, password: String): ResultadoAcceso = w
     password.isBlank() ->
         ResultadoAcceso.Rechazado("Debes ingresar tu contraseña.", CampoAcceso.PASSWORD)
 
-    else -> {
-        // autenticar devuelve el propio usuario, de modo que una sola pasada por
-        // el arreglo resuelve la validación y entrega el dato que necesita Inicio.
-        val usuario = RepositorioUsuarios.autenticar(correo, password)
+    else -> null
+}
 
-        usuario?.let { ResultadoAcceso.Autenticado(it) }
-            ?: ResultadoAcceso.Rechazado("Correo o contraseña incorrectos.", CampoAcceso.AMBOS)
+/**
+ * Valida las credenciales contra el servicio de autenticación.
+ *
+ * El formato se comprueba antes, en el dispositivo, para no gastar una llamada
+ * de red en un correo mal escrito. Solo si el formato es correcto se consulta
+ * a Firebase, que es quien verifica realmente la contraseña: la aplicación no
+ * la conoce ni la almacena.
+ *
+ * Tras autenticar, el perfil se toma del repositorio, porque Authentication
+ * guarda la credencial pero no el nombre, la región ni las preferencias.
+ */
+private suspend fun validarAcceso(
+    auth: AutenticacionFirebase,
+    correo: String,
+    password: String
+): ResultadoAcceso {
+    validarFormato(correo, password)?.let { fallo -> return fallo }
+
+    return when (val respuesta = auth.iniciarSesion(correo, password)) {
+        is ResultadoAuth.Fallo ->
+            ResultadoAcceso.Rechazado(respuesta.motivo, CampoAcceso.AMBOS)
+
+        else -> {
+            val perfil = RepositorioUsuarios.buscarPorCorreo(correo)
+                ?: Usuario.desdeFormulario(
+                    // La credencial existe pero no hay perfil asociado: se
+                    // construye uno mínimo para no dejar al usuario fuera.
+                    nombre = correo.substringBefore('@'),
+                    correo = correo,
+                    password = "",
+                    region = Region.METROPOLITANA,
+                    modoPreferido = ModoComunicacion.AMBOS
+                )
+            ResultadoAcceso.Autenticado(perfil)
+        }
     }
 }
 
