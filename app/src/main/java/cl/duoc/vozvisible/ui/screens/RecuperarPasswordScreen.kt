@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,10 +47,15 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cl.duoc.vozvisible.data.AutenticacionFirebase
+import cl.duoc.vozvisible.data.ModoComunicacion
+import cl.duoc.vozvisible.data.Region
 import cl.duoc.vozvisible.data.RepositorioUsuarios
+import cl.duoc.vozvisible.data.ResultadoAuth
 import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 import cl.duoc.vozvisible.util.esCorreoValido
+import kotlinx.coroutines.launch
 
 /**
  * Canales por los que el usuario puede recibir las instrucciones de recuperación.
@@ -97,6 +103,10 @@ fun RecuperarPasswordScreen(onVolver: () -> Unit) {
         mutableStateOf<ResultadoRecuperacion>(ResultadoRecuperacion.SinConsultar)
     }
     val canal = CanalRecuperacion.entries[indiceCanal]
+    var enviando by remember { mutableStateOf(false) }
+
+    val alcance = rememberCoroutineScope()
+    val auth = remember { AutenticacionFirebase() }
 
     Scaffold(
         topBar = {
@@ -178,12 +188,22 @@ fun RecuperarPasswordScreen(onVolver: () -> Unit) {
             }
 
             Button(
-                onClick = { resultado = buscarCuenta(correo, canal) },
+                enabled = !enviando,
+                onClick = {
+                    alcance.launch {
+                        enviando = true
+                        resultado = buscarCuenta(auth, correo, canal)
+                        enviando = false
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp)
             ) {
-                Text("Enviar instrucciones", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (enviando) "Enviando…" else "Enviar instrucciones",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
 
             // El resultado se muestra en una tarjeta para separarlo visualmente
@@ -269,22 +289,38 @@ private fun TarjetaResultado(
  *
  * Se mantiene fuera del composable para poder cubrirla con tests unitarios.
  */
-private fun buscarCuenta(correo: String, canal: CanalRecuperacion): ResultadoRecuperacion = when {
-    correo.isBlank() ->
-        ResultadoRecuperacion.NoEncontrado("Debes ingresar tu correo electrónico.")
+private suspend fun buscarCuenta(
+    auth: AutenticacionFirebase,
+    correo: String,
+    canal: CanalRecuperacion
+): ResultadoRecuperacion {
+    if (correo.isBlank()) {
+        return ResultadoRecuperacion.NoEncontrado("Debes ingresar tu correo electrónico.")
+    }
+    if (!correo.esCorreoValido()) {
+        return ResultadoRecuperacion.NoEncontrado("El correo ingresado no es válido.")
+    }
 
-    !correo.esCorreoValido() ->
-        ResultadoRecuperacion.NoEncontrado("El correo ingresado no es válido.")
+    // El envío lo hace Firebase, con un enlace de un solo uso. En la entrega
+    // anterior esto estaba simulado: la view mostraba el mensaje sin que
+    // saliera ningún correo.
+    return when (val envio = auth.enviarCorreoRecuperacion(correo)) {
+        is ResultadoAuth.Fallo -> ResultadoRecuperacion.NoEncontrado(envio.motivo)
 
-    else ->
-        // El operador elvis encadena los dos desenlaces sin un if anidado:
-        // si la búsqueda entrega un usuario se construye Encontrado, y si
-        // devuelve null se toma la rama de la derecha.
-        RepositorioUsuarios.buscarPorCorreo(correo)
-            ?.let { usuario -> ResultadoRecuperacion.Encontrado(usuario, canal) }
-            ?: ResultadoRecuperacion.NoEncontrado(
-                "No encontramos ninguna cuenta registrada con ${correo.trim()}."
-            )
+        else -> {
+            // El perfil aporta el nombre con el que saludar; si la cuenta
+            // existe en el servicio pero no en el arreglo, basta el correo.
+            val perfil = RepositorioUsuarios.buscarPorCorreo(correo)
+                ?: Usuario.desdeFormulario(
+                    nombre = correo.substringBefore('@'),
+                    correo = correo,
+                    password = "",
+                    region = Region.METROPOLITANA,
+                    modoPreferido = ModoComunicacion.AMBOS
+                )
+            ResultadoRecuperacion.Encontrado(perfil, canal)
+        }
+    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)

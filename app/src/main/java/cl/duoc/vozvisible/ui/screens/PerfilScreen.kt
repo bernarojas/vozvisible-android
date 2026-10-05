@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cl.duoc.vozvisible.data.ApoyoAccesibilidad
+import cl.duoc.vozvisible.data.AutenticacionFirebase
 import cl.duoc.vozvisible.data.ModoComunicacion
 import cl.duoc.vozvisible.data.Region
 import cl.duoc.vozvisible.data.RepositorioUsuarios
@@ -49,6 +51,7 @@ import cl.duoc.vozvisible.ui.componentes.ComboRegion
 import cl.duoc.vozvisible.ui.componentes.SelectorModo
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
 import cl.duoc.vozvisible.util.esCorreoValido
+import kotlinx.coroutines.launch
 
 /**
  * View de perfil del usuario autenticado.
@@ -92,6 +95,10 @@ fun PerfilScreen(
     var mensaje by remember { mutableStateOf("") }
     var esError by remember { mutableStateOf(false) }
     var confirmandoBorrado by remember { mutableStateOf(false) }
+    var guardando by remember { mutableStateOf(false) }
+
+    val alcance = rememberCoroutineScope()
+    val auth = remember { AutenticacionFirebase() }
 
     val region = Region.entries[indiceRegion]
     val modo = ModoComunicacion.entries[indiceModo]
@@ -113,16 +120,22 @@ fun PerfilScreen(
             preferencias = apoyos
         )
 
-        val resultado = RepositorioUsuarios.actualizar(original.correoNormalizado, datosNuevos)
-        mensaje = resultado.mensaje
-        esError = !resultado.fueExitoso
+        alcance.launch {
+            guardando = true
+            val resultado =
+                RepositorioUsuarios.actualizarEnAlmacen(original.correoNormalizado, datosNuevos)
+            guardando = false
 
-        // Si el correo cambió, la ruta actual apunta a una cuenta que ya no
-        // existe con ese identificador: se avisa hacia arriba para rehacerla.
-        if (resultado is ResultadoEdicion.Actualizado &&
-            !resultado.usuario.correspondeA(correoUsuario)
-        ) {
-            onCorreoCambiado(resultado.usuario)
+            mensaje = resultado.mensaje
+            esError = !resultado.fueExitoso
+
+            // Si el correo cambió, la ruta actual apunta a una cuenta que ya no
+            // existe con ese identificador: se avisa hacia arriba para rehacerla.
+            if (resultado is ResultadoEdicion.Actualizado &&
+                !resultado.usuario.correspondeA(correoUsuario)
+            ) {
+                onCorreoCambiado(resultado.usuario)
+            }
         }
     }
 
@@ -219,11 +232,15 @@ fun PerfilScreen(
 
             Button(
                 onClick = { guardar() },
+                enabled = !guardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp)
             ) {
-                Text("Guardar cambios", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (guardando) "Guardando…" else "Guardar cambios",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
 
             OutlinedButton(
@@ -262,8 +279,20 @@ fun PerfilScreen(
                 TextButton(
                     onClick = {
                         confirmandoBorrado = false
-                        val resultado = RepositorioUsuarios.eliminar(original.correoNormalizado)
-                        if (resultado.fueExitoso) onCuentaEliminada()
+                        alcance.launch {
+                            // El borrado alcanza a los dos servicios: el perfil
+                            // en Firestore y la credencial en Authentication.
+                            // Sin lo segundo la cuenta seguiría pudiendo entrar.
+                            val resultado =
+                                RepositorioUsuarios.eliminarDelAlmacen(original.correoNormalizado)
+                            if (resultado.fueExitoso) {
+                                auth.eliminarCuenta()
+                                onCuentaEliminada()
+                            } else {
+                                mensaje = resultado.mensaje
+                                esError = true
+                            }
+                        }
                     }
                 ) {
                     Text("Eliminar", color = MaterialTheme.colorScheme.error)
