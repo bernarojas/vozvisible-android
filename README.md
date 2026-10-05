@@ -10,18 +10,30 @@ una herramienta que integra al usuario con su entorno real y digital.
 |---|---|
 | **Asignatura** | Desarrollo de Aplicaciones Móviles (DSY2204) |
 | **Institución** | Duoc UC |
-| **Entrega** | Sumativa 2 (Semana 5) |
-| **Alcance** | Integración del lenguaje Kotlin: funciones, colecciones y arreglo de usuarios |
+| **Entrega** | Sumativa 3 (Semana 8) |
+| **Alcance** | Integración de front end y back end: Firebase, CRUD, sesión y APK firmado |
 
 ## Estado de la entrega
 
-La primera entrega implementó la capa de interfaz y la navegación. Esta segunda entrega
-adapta esa base al lenguaje Kotlin: la lógica de negocio sale de los composables hacia un
-modelo de dominio propio, los datos de selección pasan de cadenas de texto a enums, los
-desenlaces se modelan con `sealed interface` y el arreglo de usuarios llega precargado.
+La primera entrega construyó la interfaz y la navegación. La segunda adaptó esa base al
+lenguaje Kotlin, trasladando la lógica de negocio desde los composables hacia un modelo de
+dominio propio. Esta tercera incorpora el back end: hasta ahora todo vivía en un arreglo en
+memoria que se perdía al cerrar la aplicación.
+
+- **Persistencia** en Cloud Firestore, con el correo normalizado como identificador de documento.
+- **Autenticación** con Firebase Authentication. La app ya no conoce ni almacena contraseñas.
+- **Sesión** en SharedPreferences, que permite omitir el acceso si ya hay una abierta.
+- **CRUD completo**, con la nueva view de Perfil para modificar y eliminar la cuenta.
+- **APK de release firmado** con clave propia, verificado con `apksigner`.
 
 Las funciones de transcripción y síntesis de voz corresponden a iteraciones posteriores;
 la pantalla de inicio las presenta como accesos aún no operativos.
+
+### Configuración necesaria para compilar
+
+El repositorio incluye `app/google-services.json`, así que el proyecto compila al clonarlo.
+La firma del APK requiere un `keystore.properties` en la raíz, que **no se versiona**: sin
+él, `assembleRelease` produce un paquete sin firmar en lugar de fallar.
 
 ### Views implementadas
 
@@ -56,8 +68,13 @@ app/src/main/java/cl/duoc/vozvisible/
 │   ├── Region.kt                  Enum de regiones, con su zona geográfica
 │   ├── ModoComunicacion.kt        Enum del modo preferido de comunicación
 │   ├── ApoyoAccesibilidad.kt      Enum de los apoyos de la check list
-│   ├── ResultadoRegistro.kt       Sealed interface con el desenlace del registro
-│   ├── RepositorioUsuarios.kt     Arreglo observable de usuarios y sus consultas
+│   ├── ResultadoRegistro.kt       Desenlace del alta
+│   ├── ResultadoEdicion.kt        Desenlace de modificación y borrado
+│   ├── AutenticacionFirebase.kt   Envoltura de Firebase Authentication
+│   ├── FuenteUsuarios.kt          Contrato del almacén remoto
+│   ├── FuenteFirestore.kt         Implementación sobre Cloud Firestore
+│   ├── SesionUsuario.kt           Sesión en SharedPreferences
+│   ├── RepositorioUsuarios.kt     Arreglo observable y escritura remota
 │   └── EstadisticasUsuarios.kt    Resumen agregado del arreglo
 ├── util/
 │   └── ExtensionesTexto.kt        Funciones de extensión de validación y formato
@@ -65,6 +82,7 @@ app/src/main/java/cl/duoc/vozvisible/
 │   ├── Rutas.kt                   Constantes y constructores de rutas
 │   └── NavegacionApp.kt           Grafo de navegación
 └── ui/
+    ├── componentes/               Selectores compartidos por Registro y Perfil
     ├── screens/                   Una view por archivo
     └── theme/                     Tema Material 3
 ```
@@ -140,13 +158,14 @@ recuperación muestran el correo enmascarado.
 
 ## Pruebas
 
-La lógica de dominio está cubierta por 37 tests unitarios que se ejecutan en la JVM:
+La lógica de dominio está cubierta por 46 tests unitarios que se ejecutan en la JVM:
 
 ```
 app/src/test/java/cl/duoc/vozvisible/
 ├── data/
 │   ├── UsuarioTest.kt                Propiedades calculadas y autenticación
 │   ├── RepositorioUsuariosTest.kt    Arreglo, cupo, duplicados y consultas
+│   ├── RepositorioRemotoTest.kt      Escritura remota verificada con Mockito
 │   └── EstadisticasUsuariosTest.kt   Agrupaciones, promedios y porcentajes
 └── util/
     └── ExtensionesTextoTest.kt       Validación y formato de texto
