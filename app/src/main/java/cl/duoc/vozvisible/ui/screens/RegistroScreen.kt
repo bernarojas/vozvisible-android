@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,9 +53,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cl.duoc.vozvisible.data.ApoyoAccesibilidad
+import cl.duoc.vozvisible.data.AutenticacionFirebase
 import cl.duoc.vozvisible.data.ModoComunicacion
 import cl.duoc.vozvisible.data.Region
 import cl.duoc.vozvisible.data.RepositorioUsuarios
+import cl.duoc.vozvisible.data.ResultadoAuth
 import cl.duoc.vozvisible.data.ResultadoRegistro
 import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.data.resumen
@@ -63,6 +66,7 @@ import cl.duoc.vozvisible.util.LARGO_MINIMO_PASSWORD
 import cl.duoc.vozvisible.util.esCorreoValido
 import cl.duoc.vozvisible.util.esPasswordValida
 import cl.duoc.vozvisible.util.fortalezaPassword
+import kotlinx.coroutines.launch
 
 /**
  * Datos crudos del formulario, agrupados en un solo objeto.
@@ -128,6 +132,10 @@ fun RegistroScreen(onVolver: () -> Unit) {
 
     var resultado by remember { mutableStateOf<ResultadoRegistro?>(null) }
     var errorValidacion by remember { mutableStateOf("") }
+    var registrando by remember { mutableStateOf(false) }
+
+    val alcance = rememberCoroutineScope()
+    val auth = remember { AutenticacionFirebase() }
 
     fun limpiarFormulario() {
         nombre = ""
@@ -159,20 +167,42 @@ fun RegistroScreen(onVolver: () -> Unit) {
         }
 
         errorValidacion = ""
+
         // Los campos ya fueron validados, por lo que aquí las selecciones no
         // pueden ser nulas: el operador !! documenta esa garantía.
-        resultado = RepositorioUsuarios.registrar(
-            Usuario.desdeFormulario(
-                nombre = nombre,
-                correo = correo,
-                password = password,
-                region = region!!,
-                modoPreferido = modoPreferido!!,
-                preferencias = apoyosSeleccionados
-            )
+        val nuevo = Usuario.desdeFormulario(
+            nombre = nombre,
+            correo = correo,
+            password = password,
+            region = region!!,
+            modoPreferido = modoPreferido!!,
+            preferencias = apoyosSeleccionados
         )
 
-        if (resultado?.fueExitoso == true) limpiarFormulario()
+        alcance.launch {
+            registrando = true
+
+            // El alta ocurre en dos servicios: la credencial en Authentication
+            // y el perfil en Firestore. Si la credencial falla, por ejemplo
+            // porque el correo ya existe, no se crea el perfil huérfano.
+            val credencial = auth.registrar(nuevo.correo, password)
+
+            if (credencial is ResultadoAuth.Fallo) {
+                errorValidacion = credencial.motivo
+                resultado = null
+                registrando = false
+                return@launch
+            }
+
+            // Crear la cuenta deja la sesión abierta con ella. Se cierra para
+            // que el registro no desplace a quien esté usando la aplicación.
+            auth.cerrarSesion()
+
+            resultado = RepositorioUsuarios.registrarEnAlmacen(nuevo)
+            registrando = false
+
+            if (resultado?.fueExitoso == true) limpiarFormulario()
+        }
     }
 
     Scaffold(
@@ -434,12 +464,15 @@ fun RegistroScreen(onVolver: () -> Unit) {
             item {
                 Button(
                     onClick = { enviarFormulario() },
-                    enabled = RepositorioUsuarios.hayCupo(),
+                    enabled = RepositorioUsuarios.hayCupo() && !registrando,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
                 ) {
-                    Text("Registrar usuario", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (registrando) "Registrando…" else "Registrar usuario",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
 
