@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
@@ -141,12 +142,14 @@ private fun List<FuncionApp>.priorizadasPara(modo: ModoComunicacion?): List<Func
  * informan mediante un Snackbar que estarán disponibles más adelante.
  *
  * @param correoUsuario correo recibido como argumento de navegación desde Login.
+ * @param onVerPerfil se invoca al pulsar el acceso al perfil.
  * @param onCerrarSesion se invoca al pulsar el botón de salida.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InicioScreen(
     correoUsuario: String,
+    onVerPerfil: () -> Unit,
     onCerrarSesion: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -165,6 +168,12 @@ fun InicioScreen(
             TopAppBar(
                 title = { Text("VozVisible") },
                 actions = {
+                    IconButton(onClick = onVerPerfil) {
+                        Icon(
+                            Icons.Filled.ManageAccounts,
+                            contentDescription = "Ver y editar mi perfil"
+                        )
+                    }
                     IconButton(onClick = onCerrarSesion) {
                         Icon(
                             Icons.AutoMirrored.Filled.Logout,
@@ -411,6 +420,10 @@ private fun TarjetaFuncion(
 @Composable
 private fun InicioScreenPreview() {
     VozVisibleTheme {
-        InicioScreen(correoUsuario = "camila.reyes@duocuc.cl", onCerrarSesion = {})
+        InicioScreen(
+            correoUsuario = "camila.reyes@duocuc.cl",
+            onVerPerfil = {},
+            onCerrarSesion = {}
+        )
     }
 }

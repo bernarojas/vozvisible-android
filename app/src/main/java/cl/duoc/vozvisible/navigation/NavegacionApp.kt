@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 import cl.duoc.vozvisible.data.SesionUsuario
 import cl.duoc.vozvisible.ui.screens.InicioScreen
 import cl.duoc.vozvisible.ui.screens.LoginScreen
+import cl.duoc.vozvisible.ui.screens.PerfilScreen
 import cl.duoc.vozvisible.ui.screens.RecuperarPasswordScreen
 import cl.duoc.vozvisible.ui.screens.RegistroScreen
 
@@ -76,10 +77,36 @@ fun NavegacionApp() {
             val correo = backStackEntry.arguments?.getString(Rutas.ARG_CORREO).orEmpty()
             InicioScreen(
                 correoUsuario = correo,
+                onVerPerfil = { navController.navigate(Rutas.perfilDe(correo)) },
                 onCerrarSesion = {
                     sesion.cerrar()
                     navController.navigate(Rutas.LOGIN) {
                         popUpTo(Rutas.INICIO) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = Rutas.PERFIL,
+            arguments = listOf(navArgument(Rutas.ARG_CORREO) { type = NavType.StringType })
+        ) { backStackEntry ->
+            val correo = backStackEntry.arguments?.getString(Rutas.ARG_CORREO).orEmpty()
+            PerfilScreen(
+                correoUsuario = correo,
+                onVolver = { navController.popBackStack() },
+                onCorreoCambiado = { usuario ->
+                    // El correo es la clave de la cuenta y viaja en la ruta:
+                    // al cambiarlo hay que rehacer la pila con el valor nuevo.
+                    sesion.abrir(usuario)
+                    navController.navigate(Rutas.inicioDe(usuario.correoNormalizado)) {
+                        popUpTo(Rutas.INICIO) { inclusive = true }
+                    }
+                },
+                onCuentaEliminada = {
+                    sesion.cerrar()
+                    navController.navigate(Rutas.LOGIN) {
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )

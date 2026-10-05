@@ -17,6 +17,9 @@ object Rutas {
     /** Patrón de la ruta: el tramo entre llaves es un argumento de navegación. */
     const val INICIO = "inicio/{$ARG_CORREO}"
 
+    /** View de perfil, donde se modifican y eliminan los datos de la cuenta. */
+    const val PERFIL = "perfil/{$ARG_CORREO}"
+
     /**
      * Construye la ruta concreta hacia Inicio para un usuario dado.
      *
@@ -24,4 +27,7 @@ object Rutas {
      * navegación y contiene caracteres como @ que deben escaparse.
      */
     fun inicioDe(correo: String): String = "inicio/${Uri.encode(correo)}"
+
+    /** Construye la ruta concreta hacia Perfil para un usuario dado. */
+    fun perfilDe(correo: String): String = "perfil/${Uri.encode(correo)}"
 }
