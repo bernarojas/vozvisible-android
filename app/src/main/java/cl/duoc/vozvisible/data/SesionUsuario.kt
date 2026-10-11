@@ -52,9 +52,27 @@ class SesionUsuario(context: Context) {
         preferencias.edit { putString(CLAVE_NOMBRE, nombre) }
     }
 
-    /** Borra la sesión. Se invoca al cerrar sesión y al eliminar la cuenta. */
+    /**
+     * Indica si el tutorial ya se recorrió en este dispositivo.
+     *
+     * Mientras sea falso, Inicio muestra la invitación a verlo.
+     */
+    var tutorialVisto: Boolean
+        get() = preferencias.getBoolean(CLAVE_TUTORIAL, false)
+        set(visto) = preferencias.edit { putBoolean(CLAVE_TUTORIAL, visto) }
+
+    /**
+     * Borra la sesión. Se invoca al cerrar sesión y al eliminar la cuenta.
+     *
+     * Se quitan solo las claves de la sesión y no se usa `clear`: la marca del
+     * tutorial pertenece al dispositivo y no debe reaparecer en cada acceso.
+     */
     fun cerrar() {
-        preferencias.edit { clear() }
+        preferencias.edit {
+            remove(CLAVE_CORREO)
+            remove(CLAVE_NOMBRE)
+            remove(CLAVE_ACCESO)
+        }
     }
 
     private companion object {
@@ -62,5 +80,6 @@ class SesionUsuario(context: Context) {
         const val CLAVE_CORREO = "correo"
         const val CLAVE_NOMBRE = "nombre"
         const val CLAVE_ACCESO = "ultimo_acceso"
+        const val CLAVE_TUTORIAL = "tutorial_visto"
     }
 }

@@ -17,14 +17,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,14 +33,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,7 +50,14 @@ import cl.duoc.vozvisible.data.ModoComunicacion
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.Usuario
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
-import kotlinx.coroutines.launch
+
+/**
+ * Destinos a los que lleva cada tarjeta del menú principal.
+ *
+ * La view solo informa cuál se eligió; el grafo de navegación decide a qué
+ * ruta corresponde, de modo que la view no conoce el NavController.
+ */
+enum class DestinoInicio { VOZ_A_TEXTO, TEXTO_A_VOZ, FRASES_RAPIDAS, HISTORIAL, AYUDA, PERFIL }
 
 /**
  * Función de accesibilidad ofrecida por la aplicación.
@@ -61,6 +65,7 @@ import kotlinx.coroutines.launch
  * @property titulo nombre visible en la tarjeta de la grilla.
  * @property icono pictograma representativo de la función.
  * @property descripcion texto para lectores de pantalla y detalle de la acción.
+ * @property destino view que abre la tarjeta.
  * @property modoRelacionado modo de comunicación al que sirve la función, o null
  *   si es transversal. Se usa para ordenar la grilla según la preferencia del usuario.
  */
@@ -68,6 +73,7 @@ private data class FuncionApp(
     val titulo: String,
     val icono: ImageVector,
     val descripcion: String,
+    val destino: DestinoInicio,
     val modoRelacionado: ModoComunicacion? = null
 )
 
@@ -77,36 +83,40 @@ private val FUNCIONES = listOf(
         titulo = "Voz a texto",
         icono = Icons.Filled.Mic,
         descripcion = "Transcribe en pantalla lo que dice tu interlocutor",
+        destino = DestinoInicio.VOZ_A_TEXTO,
         modoRelacionado = ModoComunicacion.VOZ_A_TEXTO
     ),
     FuncionApp(
         titulo = "Texto a voz",
         icono = Icons.Filled.RecordVoiceOver,
         descripcion = "Reproduce en voz alta el mensaje que escribas",
+        destino = DestinoInicio.TEXTO_A_VOZ,
         modoRelacionado = ModoComunicacion.TEXTO_A_VOZ
     ),
     FuncionApp(
         titulo = "Frases rápidas",
         icono = Icons.Filled.Star,
-        descripcion = "Guarda frases de uso frecuente para responder al instante",
+        descripcion = "Responde al instante con frases de uso frecuente",
+        destino = DestinoInicio.FRASES_RAPIDAS,
         modoRelacionado = ModoComunicacion.TEXTO_A_VOZ
     ),
     FuncionApp(
-        titulo = "Alertas visuales",
-        icono = Icons.Filled.Vibration,
-        descripcion = "Avisa con vibración y destellos ante sonidos del entorno",
-        modoRelacionado = ModoComunicacion.VOZ_A_TEXTO
+        titulo = "Historial",
+        icono = Icons.Filled.History,
+        descripcion = "Revisa tus solicitudes y las respuestas guardadas",
+        destino = DestinoInicio.HISTORIAL
     ),
     FuncionApp(
-        titulo = "Subtítulos",
-        icono = Icons.Filled.ClosedCaption,
-        descripcion = "Genera subtítulos en tiempo real durante una conversación",
-        modoRelacionado = ModoComunicacion.VOZ_A_TEXTO
+        titulo = "Ayuda",
+        icono = Icons.AutoMirrored.Filled.HelpOutline,
+        descripcion = "Tutorial paso a paso para usar la aplicación",
+        destino = DestinoInicio.AYUDA
     ),
     FuncionApp(
         titulo = "Configuración",
         icono = Icons.Filled.Settings,
-        descripcion = "Ajusta contraste, tamaño de texto y preferencias"
+        descripcion = "Ajusta tus datos, tu modo de comunicación y tus apoyos",
+        destino = DestinoInicio.PERFIL
     )
 )
 
@@ -138,23 +148,21 @@ private fun List<FuncionApp>.priorizadasPara(modo: ModoComunicacion?): List<Func
  *
  * Presenta las funciones de la aplicación en una grilla de dos columnas,
  * precedida por un resumen del arreglo de usuarios calculado con operaciones
- * de colección. En esta entrega las tarjetas no ejecutan la función todavía:
- * informan mediante un Snackbar que estarán disponibles más adelante.
+ * de colección. Cada tarjeta abre su view a través de [onAbrir].
  *
  * @param correoUsuario correo recibido como argumento de navegación desde Login.
- * @param onVerPerfil se invoca al pulsar el acceso al perfil.
+ * @param mostrarBienvenida muestra la invitación al tutorial, hasta que se recorra una vez.
+ * @param onAbrir se invoca con el destino de la tarjeta o del ícono pulsado.
  * @param onCerrarSesion se invoca al pulsar el botón de salida.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InicioScreen(
     correoUsuario: String,
-    onVerPerfil: () -> Unit,
+    mostrarBienvenida: Boolean,
+    onAbrir: (DestinoInicio) -> Unit,
     onCerrarSesion: () -> Unit
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
     // Se resuelve el usuario a partir del correo recibido. Si no existiera en el
     // arreglo se trabaja con null y la interfaz usa sus valores de respaldo.
     val usuario: Usuario? = RepositorioUsuarios.buscarPorCorreo(correoUsuario)
@@ -168,7 +176,13 @@ fun InicioScreen(
             TopAppBar(
                 title = { Text("VozVisible") },
                 actions = {
-                    IconButton(onClick = onVerPerfil) {
+                    IconButton(onClick = { onAbrir(DestinoInicio.AYUDA) }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.HelpOutline,
+                            contentDescription = "Ayuda y tutorial"
+                        )
+                    }
+                    IconButton(onClick = { onAbrir(DestinoInicio.PERFIL) }) {
                         Icon(
                             Icons.Filled.ManageAccounts,
                             contentDescription = "Ver y editar mi perfil"
@@ -182,8 +196,7 @@ fun InicioScreen(
                     }
                 }
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { padding ->
 
         // Una sola grilla contiene toda la pantalla: la cabecera y el resumen
@@ -203,6 +216,12 @@ fun InicioScreen(
                 CabeceraUsuario(usuario = usuario, correoUsuario = correoUsuario)
             }
 
+            if (mostrarBienvenida) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    InvitacionTutorial(onVerTutorial = { onAbrir(DestinoInicio.AYUDA) })
+                }
+            }
+
             item(span = { GridItemSpan(maxLineSpan) }) {
                 ResumenUsuarios(estadisticas)
             }
@@ -220,13 +239,7 @@ fun InicioScreen(
                     funcion = funcion,
                     destacada = funcion.modoRelacionado != null &&
                         funcion.modoRelacionado == usuario?.modoPreferido,
-                    onClick = {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                "${funcion.titulo}: disponible en la próxima entrega"
-                            )
-                        }
-                    }
+                    onClick = { onAbrir(funcion.destino) }
                 )
             }
 
@@ -276,6 +289,28 @@ private fun CabeceraUsuario(usuario: Usuario?, correoUsuario: String) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/** Invitación a recorrer el tutorial, visible hasta que el usuario lo complete. */
+@Composable
+private fun InvitacionTutorial(onVerTutorial: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+        ) {
+            Text(
+                text = "¿Primera vez en VozVisible? Te mostramos cómo funciona en seis pasos.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onVerTutorial) { Text("Ver tutorial") }
         }
     }
 }
@@ -422,7 +457,8 @@ private fun InicioScreenPreview() {
     VozVisibleTheme {
         InicioScreen(
             correoUsuario = "camila.reyes@duocuc.cl",
-            onVerPerfil = {},
+            mostrarBienvenida = true,
+            onAbrir = {},
             onCerrarSesion = {}
         )
     }
