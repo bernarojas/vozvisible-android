@@ -43,6 +43,7 @@ import cl.duoc.vozvisible.data.ApoyoAccesibilidad
 import cl.duoc.vozvisible.data.AutenticacionFirebase
 import cl.duoc.vozvisible.data.ModoComunicacion
 import cl.duoc.vozvisible.data.Region
+import cl.duoc.vozvisible.data.RepositorioInteracciones
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.data.ResultadoEdicion
 import cl.duoc.vozvisible.data.Usuario
@@ -121,19 +122,25 @@ fun PerfilScreen(
         )
 
         alcance.launch {
-            guardando = true
-            val resultado =
+            // finally devuelve el botón a su estado normal aunque la escritura
+            // remota lance una excepción o la corrutina se cancele.
+            val resultado = try {
+                guardando = true
                 RepositorioUsuarios.actualizarEnAlmacen(original.correoNormalizado, datosNuevos)
-            guardando = false
+            } finally {
+                guardando = false
+            }
 
             mensaje = resultado.mensaje
             esError = !resultado.fueExitoso
 
             // Si el correo cambió, la ruta actual apunta a una cuenta que ya no
             // existe con ese identificador: se avisa hacia arriba para rehacerla.
+            // El historial se traspasa antes, para que siga al usuario.
             if (resultado is ResultadoEdicion.Actualizado &&
                 !resultado.usuario.correspondeA(correoUsuario)
             ) {
+                RepositorioInteracciones.reasignar(correoUsuario, resultado.usuario.correo)
                 onCorreoCambiado(resultado.usuario)
             }
         }
@@ -286,6 +293,9 @@ fun PerfilScreen(
                             val resultado =
                                 RepositorioUsuarios.eliminarDelAlmacen(original.correoNormalizado)
                             if (resultado.fueExitoso) {
+                                // El historial se borra antes que la credencial:
+                                // las reglas de Firestore exigen sesión iniciada.
+                                RepositorioInteracciones.vaciar(original.correoNormalizado)
                                 auth.eliminarCuenta()
                                 onCuentaEliminada()
                             } else {

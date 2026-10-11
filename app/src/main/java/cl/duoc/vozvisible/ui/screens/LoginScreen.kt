@@ -227,9 +227,14 @@ fun LoginScreen(
                         // La consulta al servicio es una operación de red: se
                         // lanza en una corrutina para no bloquear la interfaz.
                         alcance.launch {
-                            verificando = true
-                            val intento = validarAcceso(auth, correo, password)
-                            verificando = false
+                            // try/finally asegura que el botón se rehabilite
+                            // aunque la consulta termine con una excepción.
+                            val intento = try {
+                                verificando = true
+                                validarAcceso(auth, correo, password)
+                            } finally {
+                                verificando = false
+                            }
                             resultado = intento
                             // El smart cast permite leer `intento.usuario` sin
                             // volver a consultar ni convertir el tipo a mano.
