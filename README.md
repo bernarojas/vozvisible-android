@@ -10,24 +10,30 @@ una herramienta que integra al usuario con su entorno real y digital.
 |---|---|
 | **Asignatura** | Desarrollo de Aplicaciones Móviles (DSY2204) |
 | **Institución** | Duoc UC |
-| **Entrega** | Sumativa 3 (Semana 8) |
-| **Alcance** | Integración de front end y back end: Firebase, CRUD, sesión y APK firmado |
+| **Entrega** | Evaluación final transversal (Semana 9) |
+| **Alcance** | Aplicación completa: escribir y hablar, historial, ayuda, Firebase y APK firmado |
 
 ## Estado de la entrega
 
 La primera entrega construyó la interfaz y la navegación. La segunda adaptó esa base al
 lenguaje Kotlin, trasladando la lógica de negocio desde los composables hacia un modelo de
-dominio propio. Esta tercera incorpora el back end: hasta ahora todo vivía en un arreglo en
-memoria que se perdía al cerrar la aplicación.
+dominio propio. La tercera incorporó el back end: Firestore, Authentication, sesión con
+SharedPreferences, CRUD de usuarios y el APK firmado.
 
-- **Persistencia** en Cloud Firestore, con el correo normalizado como identificador de documento.
-- **Autenticación** con Firebase Authentication. La app ya no conoce ni almacena contraseñas.
-- **Sesión** en SharedPreferences, que permite omitir el acceso si ya hay una abierta.
-- **CRUD completo**, con la nueva view de Perfil para modificar y eliminar la cuenta.
-- **APK de release firmado** con clave propia, verificado con `apksigner`.
+Esta entrega final completa el flujo de comunicación que da sentido a la aplicación:
 
-Las funciones de transcripción y síntesis de voz corresponden a iteraciones posteriores;
-la pantalla de inicio las presenta como accesos aún no operativos.
+1. El usuario ingresa con sus credenciales y la aplicación lo saluda por su nombre.
+2. En el menú principal elige **escribir** (Texto a voz) o **hablar** (Voz a texto).
+3. La aplicación responde: reproduce en voz alta lo escrito, o transcribe lo que dice el
+   interlocutor, guiando cada paso con indicaciones visuales.
+4. Cada solicitud y su respuesta se guardan en el historial, en Cloud Firestore.
+5. El usuario vuelve al menú principal.
+
+- **Texto a voz** con `TextToSpeech`, en español de Chile, con avance visual por fragmentos.
+- **Voz a texto** con `SpeechRecognizer`, con subtítulos en vivo e intensidad de la voz.
+- **Historial** con su propio CRUD: crear, consultar, marcar como favorita y eliminar.
+- **Frases rápidas**: las favoritas del historial se suman a frases predeterminadas.
+- **Ayuda**: tutorial de seis pasos, ofrecido en Inicio hasta que se recorre una vez.
 
 ### Configuración necesaria para compilar
 
@@ -35,14 +41,28 @@ El repositorio incluye `app/google-services.json`, así que el proyecto compila 
 La firma del APK requiere un `keystore.properties` en la raíz, que **no se versiona**: sin
 él, `assembleRelease` produce un paquete sin firmar en lugar de fallar.
 
+El historial vive en la colección `interacciones`. Las reglas de Firestore deben cubrirla
+con el mismo criterio que la colección `usuarios`, es decir, acceso solo con sesión iniciada:
+
+```
+match /interacciones/{id} {
+  allow read, write: if request.auth != null;
+}
+```
+
 ### Views implementadas
 
 | View | Descripción |
 |---|---|
-| **Login** | Acceso con validación de credenciales contra el arreglo de usuarios |
-| **Registro** | Alta de usuarios con validación de formulario y tabla de registrados |
-| **Recuperar contraseña** | Búsqueda de la cuenta y simulación de envío de instrucciones |
-| **Inicio** | Resumen de la comunidad y grilla de funciones priorizada por preferencia |
+| **Login** | Acceso contra Firebase Authentication |
+| **Registro** | Alta de la credencial y del perfil, con validación y tabla de registrados |
+| **Recuperar contraseña** | Envío del correo de restablecimiento por Firebase |
+| **Inicio** | Saludo, resumen de la comunidad y menú de funciones priorizado por preferencia |
+| **Texto a voz** | El usuario escribe o elige una frase rápida y la aplicación la dice en voz alta |
+| **Voz a texto** | La aplicación escucha al interlocutor y muestra la transcripción en pantalla |
+| **Historial** | Solicitudes y respuestas guardadas, con filtros, favoritas y borrado |
+| **Ayuda** | Tutorial de uso en páginas deslizables |
+| **Perfil** | Modificación y eliminación de la cuenta |
 
 ### Componentes de Material Design y Jetpack Compose
 
@@ -75,7 +95,17 @@ app/src/main/java/cl/duoc/vozvisible/
 │   ├── FuenteFirestore.kt         Implementación sobre Cloud Firestore
 │   ├── SesionUsuario.kt           Sesión en SharedPreferences
 │   ├── RepositorioUsuarios.kt     Arreglo observable y escritura remota
-│   └── EstadisticasUsuarios.kt    Resumen agregado del arreglo
+│   ├── EstadisticasUsuarios.kt    Resumen agregado del arreglo
+│   ├── TipoInteraccion.kt         Enum de las dos formas de comunicarse
+│   ├── Interaccion.kt             Solicitud y respuesta guardadas en el historial
+│   ├── ResumenHistorial.kt        Cifras del historial, en un solo recorrido
+│   ├── FuenteInteracciones.kt     Contrato del almacén del historial
+│   ├── FirestoreInteracciones.kt  Implementación sobre Cloud Firestore
+│   └── RepositorioInteracciones.kt Historial observable y escritura remota
+├── voz/
+│   ├── MotorComunicacion.kt       Clase abstracta base y estados del motor
+│   ├── MotorTextoAVoz.kt          Síntesis de voz con TextToSpeech
+│   └── MotorVozATexto.kt          Reconocimiento de voz con SpeechRecognizer
 ├── util/
 │   └── ExtensionesTexto.kt        Funciones de extensión de validación y formato
 ├── navigation/
@@ -120,6 +150,12 @@ Credenciales de los usuarios precargados:
 | Parámetros con nombre y valor por defecto | `Usuario.desdeFormulario()`, `apoyosComoTexto()` |
 | Null-safety: `?.`, `?:`, `let`, smart cast | Validación de acceso y resolución del usuario en Inicio |
 | Colecciones: `filter`, `map`, `flatMap`, `groupingBy`, `associateBy`, `sortedWith`, `average`, `take` | `EstadisticasUsuarios.calcular()`, `RepositorioUsuarios` |
+| Clase abstracta, herencia, `open`, `override` y `super` | `MotorComunicacion` y sus subclases `MotorTextoAVoz`, `MotorVozATexto` |
+| Implementación de interfaces del sistema | `TextToSpeech.OnInitListener`, `RecognitionListener` |
+| Modificadores `private`, `protected` e `internal` | `MotorComunicacion.contexto`, `estado` con `protected set`, `RepositorioInteracciones.restaurar()` |
+| Ciclos `for` y `while` | `ResumenHistorial.calcular()`, `contarPalabras()`, `String.fragmentosParaVoz()` |
+| `try` / `catch` / `finally` | `RepositorioInteracciones.cargar()` y `escribirEnServidor()`, estados de espera en las views |
+| Lambdas guardadas en un enum | `FiltroHistorial` en la view Historial |
 
 ### Decisiones de diseño
 
@@ -151,24 +187,38 @@ la interfaz aplica objetivos táctiles de al menos 56dp, descripciones de conten
 iconos para lectores de pantalla, roles semánticos en los controles de selección y áreas
 seleccionables que abarcan la fila completa.
 
-**Seguridad.** La view de recuperación nunca muestra la contraseña en pantalla, aunque
-técnicamente esté disponible en memoria: confirma la existencia de la cuenta y simula el
-envío de instrucciones por el canal elegido. La tabla de registrados y el mensaje de
-recuperación muestran el correo enmascarado.
+**Retroalimentación solo visual.** Quien no oye no sabe si el teléfono terminó de hablar ni
+si está captando la voz. Texto a voz entrega el mensaje por fragmentos y muestra el avance
+en una barra; Voz a texto muestra la intensidad del sonido y los subtítulos parciales
+mientras la persona habla.
+
+**Escrituras que no cuelgan la interfaz.** Firestore no confirma una escritura hecha sin
+conexión hasta que la red vuelve. El historial espera la confirmación como máximo cinco
+segundos y distingue si la escritura quedó en cola o si el servidor la rechazó, para no
+prometer una sincronización que no ocurrirá.
+
+**Seguridad.** Las contraseñas las administra Firebase Authentication: la aplicación no
+las conoce ni las almacena. La tabla de registrados y el mensaje de recuperación muestran
+el correo enmascarado.
 
 ## Pruebas
 
-La lógica de dominio está cubierta por 46 tests unitarios que se ejecutan en la JVM:
+La lógica de dominio está cubierta por 74 tests unitarios que se ejecutan en la JVM, con
+JUnit y Mockito:
 
 ```
 app/src/test/java/cl/duoc/vozvisible/
 ├── data/
-│   ├── UsuarioTest.kt                Propiedades calculadas y autenticación
-│   ├── RepositorioUsuariosTest.kt    Arreglo, cupo, duplicados y consultas
-│   ├── RepositorioRemotoTest.kt      Escritura remota verificada con Mockito
-│   └── EstadisticasUsuariosTest.kt   Agrupaciones, promedios y porcentajes
-└── util/
-    └── ExtensionesTextoTest.kt       Validación y formato de texto
+│   ├── UsuarioTest.kt                   Propiedades calculadas y autenticación
+│   ├── RepositorioUsuariosTest.kt       Arreglo, cupo, duplicados y consultas
+│   ├── RepositorioRemotoTest.kt         Escritura remota verificada con Mockito
+│   ├── EstadisticasUsuariosTest.kt      Agrupaciones, promedios y porcentajes
+│   ├── RepositorioInteraccionesTest.kt  CRUD del historial, plazo y rechazo del servidor
+│   └── ResumenHistorialTest.kt          Conteos del historial y de palabras
+├── util/
+│   └── ExtensionesTextoTest.kt          Validación, formato y fragmentación de texto
+└── voz/
+    └── MotoresTest.kt                   Identificadores, intensidad y mensajes de error
 ```
 
 Ejecutarlas con:
@@ -214,14 +264,17 @@ gradlew installDebug
 | `minSdk` | 24 (Android 7.0) |
 | `targetSdk` / `compileSdk` | 37 |
 | Navegación | `androidx.navigation:navigation-compose` |
-| Pruebas | JUnit 4 |
+| Back end | Firebase Authentication y Cloud Firestore |
+| Voz | `TextToSpeech` y `SpeechRecognizer` del sistema |
+| Pruebas | JUnit 4 y Mockito |
 | Build | Gradle con Kotlin DSL y catálogo de versiones |
 
 ## Limitaciones conocidas
 
-Los usuarios se almacenan en un arreglo en memoria, según lo solicitado para esta entrega.
-Los datos se pierden al cerrar la aplicación y las contraseñas se guardan en texto plano.
-La persistencia mediante Room o DataStore, y el cifrado de credenciales, están
-contemplados para una iteración posterior.
+El reconocimiento y la síntesis de voz usan los servicios instalados en el dispositivo. Voz
+a texto necesita el servicio de reconocimiento de Google y conexión a internet; Texto a voz
+necesita una voz en español instalada.
 
-El cupo del arreglo está limitado a diez usuarios.
+La detección de sonidos del entorno para generar alertas visuales queda fuera del alcance.
+
+El cupo del arreglo de usuarios está limitado a diez.
