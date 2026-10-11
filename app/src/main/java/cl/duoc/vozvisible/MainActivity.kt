@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import cl.duoc.vozvisible.data.FirestoreInteracciones
 import cl.duoc.vozvisible.data.FuenteFirestore
+import cl.duoc.vozvisible.data.RepositorioInteracciones
 import cl.duoc.vozvisible.data.RepositorioUsuarios
 import cl.duoc.vozvisible.navigation.NavegacionApp
 import cl.duoc.vozvisible.ui.theme.VozVisibleTheme
@@ -27,6 +29,7 @@ class MainActivity : ComponentActivity() {
         // repositorio queda igual de utilizable sin el, que es como corren las
         // pruebas unitarias.
         RepositorioUsuarios.conectar(FuenteFirestore())
+        RepositorioInteracciones.conectar(FirestoreInteracciones())
 
         enableEdgeToEdge()
         setContent {
