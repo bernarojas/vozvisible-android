@@ -98,7 +98,15 @@ sealed interface EstadoMotor {
 
     /** Reproduciendo un texto; el avance se muestra en pantalla. */
     data class Hablando(val fragmento: Int, val total: Int) : EstadoMotor {
-        val progreso: Float get() = fragmento.toFloat() / total
+
+        /**
+         * Proporción de fragmentos ya terminados. Se cuentan los anteriores al
+         * actual: mientras suena el último la barra no debe verse completa.
+         */
+        val progreso: Float get() = (fragmento - 1).toFloat() / total
+
+        /** Con un solo fragmento no hay avance que medir, solo actividad. */
+        val avanceMedible: Boolean get() = total > 1
     }
 
     /**

@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
 private val PASOS_TEXTO_A_VOZ = listOf(
     "Escribe tu mensaje o toca una frase rápida.",
     "Pulsa «Reproducir en voz alta» y acerca el teléfono a tu interlocutor.",
-    "Mira la barra de avance: cuando se completa, el mensaje terminó de sonar."
+    "Mira la barra: mientras se mueve, el mensaje sigue sonando. Al terminar, desaparece."
 )
 
 /**
@@ -191,12 +191,24 @@ fun TextoAVozScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(Modifier.height(16.dp))
-                        LinearProgressIndicator(
-                            progress = { progreso },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                        )
+                        // Un mensaje corto suena de una vez: la barra indeterminada
+                        // indica que sigue sonando sin aparentar un avance que no
+                        // se puede medir.
+                        val hablando = estado as? EstadoMotor.Hablando
+                        if (hablando?.avanceMedible == true) {
+                            LinearProgressIndicator(
+                                progress = { progreso },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                            )
+                        }
                     }
                 }
             }

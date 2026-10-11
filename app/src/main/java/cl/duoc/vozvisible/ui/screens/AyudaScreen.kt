@@ -78,7 +78,7 @@ private val PASOS_TUTORIAL = listOf(
         icono = Icons.AutoMirrored.Filled.VolumeUp,
         titulo = "Escribir: Texto a voz",
         explicacion = "Escribe tu mensaje y pulsa «Reproducir en voz alta». El texto se muestra " +
-            "en grande y una barra te indica cuánto falta para que termine de sonar.",
+            "en grande y una barra se mueve mientras suena; al terminar, desaparece.",
         consejo = "Sube el volumen del teléfono y acércalo a tu interlocutor."
     ),
     PasoTutorial(

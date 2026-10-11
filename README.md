@@ -203,7 +203,7 @@ el correo enmascarado.
 
 ## Pruebas
 
-La lógica de dominio está cubierta por 74 tests unitarios que se ejecutan en la JVM, con
+La lógica de dominio está cubierta por 75 tests unitarios que se ejecutan en la JVM, con
 JUnit y Mockito:
 
 ```

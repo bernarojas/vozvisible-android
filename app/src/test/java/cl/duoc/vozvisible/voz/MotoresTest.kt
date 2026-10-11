@@ -2,6 +2,7 @@ package cl.duoc.vozvisible.voz
 
 import android.speech.SpeechRecognizer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +31,14 @@ class MotoresTest {
         assertNull(MotorTextoAVoz.interpretar("1-2"))
         // El índice debe quedar dentro del total de fragmentos.
         assertNull(MotorTextoAVoz.interpretar("1-3-3"))
+    }
+
+    @Test
+    fun `el avance cuenta solo los fragmentos ya terminados`() {
+        assertEquals(0f, EstadoMotor.Hablando(fragmento = 1, total = 4).progreso, 0.001f)
+        assertEquals(0.75f, EstadoMotor.Hablando(fragmento = 4, total = 4).progreso, 0.001f)
+        // Un mensaje de un solo fragmento no tiene avance medible.
+        assertFalse(EstadoMotor.Hablando(fragmento = 1, total = 1).avanceMedible)
     }
 
     @Test
