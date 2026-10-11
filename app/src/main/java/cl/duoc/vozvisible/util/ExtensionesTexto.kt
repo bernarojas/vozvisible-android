@@ -1,5 +1,9 @@
 package cl.duoc.vozvisible.util
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 /**
  * Funciones de extensión sobre String usadas por las tres views de formulario.
  *
@@ -74,6 +78,70 @@ fun String.aNombrePropio(): String =
         .joinToString(" ") { palabra ->
             palabra.lowercase().replaceFirstChar { inicial -> inicial.uppercase() }
         }
+
+/**
+ * Antepone la cantidad a la palabra, en singular o plural según corresponda.
+ *
+ * Ejemplo: `1.enPlural("fragmento")` produce `"1 fragmento"`; con 3, `"3 fragmentos"`.
+ */
+fun Int.enPlural(singular: String, plural: String = singular + "s"): String =
+    "$this ${if (this == 1) singular else plural}"
+
+/** Formato de fecha y hora del historial, con el orden día-mes-año usado en Chile. */
+private const val PATRON_FECHA_HORA = "dd-MM-yyyy HH:mm"
+
+/**
+ * Convierte una marca de tiempo en milisegundos a texto legible.
+ *
+ * Se crea un formateador por llamada porque SimpleDateFormat no es seguro entre
+ * hilos: compartir una sola instancia podría mezclar fechas.
+ */
+fun Long.comoFechaHora(): String =
+    SimpleDateFormat(PATRON_FECHA_HORA, Locale.forLanguageTag("es-CL")).format(Date(this))
+
+/** Largo máximo de cada fragmento que se envía al motor de síntesis de voz. */
+const val LARGO_FRAGMENTO_VOZ = 200
+
+/**
+ * Divide un texto en fragmentos para reproducirlo en voz alta.
+ *
+ * El motor de síntesis admite textos largos, pero entregarlos por partes tiene
+ * una ventaja para quien no oye: la aplicación sabe qué fragmento está sonando
+ * y puede mostrar en pantalla el avance ("fragmento 2 de 3"), que de otro modo
+ * el usuario no tendría cómo percibir.
+ *
+ * Se corta preferentemente después de un signo de puntuación y, si no hay
+ * ninguno dentro del límite, en el último espacio, para no partir palabras.
+ *
+ * @param largoMaximo tamaño máximo de cada fragmento.
+ */
+fun String.fragmentosParaVoz(largoMaximo: Int = LARGO_FRAGMENTO_VOZ): List<String> {
+    require(largoMaximo > 0) { "El largo máximo debe ser positivo" }
+
+    val fragmentos = mutableListOf<String>()
+    var restante = trim()
+
+    while (restante.length > largoMaximo) {
+        val tramo = restante.substring(0, largoMaximo)
+
+        // Se busca el último corte natural dentro del tramo. lastIndexOfAny
+        // devuelve -1 cuando no encuentra ninguno de los caracteres.
+        val finDeFrase = tramo.lastIndexOfAny(charArrayOf('.', '?', '!', ';', ':', ','))
+        val ultimoEspacio = tramo.lastIndexOf(' ')
+
+        val corte = when {
+            finDeFrase > 0 -> finDeFrase + 1
+            ultimoEspacio > 0 -> ultimoEspacio
+            else -> largoMaximo // una sola palabra más larga que el límite
+        }
+
+        fragmentos += restante.substring(0, corte).trim()
+        restante = restante.substring(corte).trim()
+    }
+
+    if (restante.isNotEmpty()) fragmentos += restante
+    return fragmentos
+}
 
 /**
  * Oculta parcialmente un correo para mostrarlo sin exponerlo por completo.

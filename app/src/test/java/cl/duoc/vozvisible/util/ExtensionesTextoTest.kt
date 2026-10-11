@@ -74,4 +74,39 @@ class ExtensionesTextoTest {
     fun `deja intacto un texto que no es un correo`() {
         assertEquals("no-es-correo", "no-es-correo".correoEnmascarado())
     }
+
+    @Test
+    fun `un texto corto se reproduce en un solo fragmento`() {
+        assertEquals(listOf("Hola, buenos días."), "  Hola, buenos días.  ".fragmentosParaVoz())
+        assertTrue("   ".fragmentosParaVoz().isEmpty())
+    }
+
+    @Test
+    fun `un texto largo se corta en el ultimo signo de puntuacion`() {
+        val fragmentos = "Necesito un turno. Vengo por un control médico".fragmentosParaVoz(largoMaximo = 25)
+
+        assertEquals(listOf("Necesito un turno.", "Vengo por un control", "médico"), fragmentos)
+    }
+
+    @Test
+    fun `ningun fragmento supera el largo maximo ni se pierde texto`() {
+        val texto = "palabra ".repeat(120).trim()
+
+        val fragmentos = texto.fragmentosParaVoz(largoMaximo = 50)
+
+        assertTrue(fragmentos.all { fragmento -> fragmento.length <= 50 })
+        assertEquals(texto, fragmentos.joinToString(" "))
+    }
+
+    @Test
+    fun `una palabra mas larga que el limite se corta igual`() {
+        assertEquals(listOf("abcde", "fghij", "k"), "abcdefghijk".fragmentosParaVoz(largoMaximo = 5))
+    }
+
+    @Test
+    fun `el plural depende de la cantidad`() {
+        assertEquals("1 fragmento", 1.enPlural("fragmento"))
+        assertEquals("3 fragmentos", 3.enPlural("fragmento"))
+        assertEquals("0 interacciones", 0.enPlural("interacción", "interacciones"))
+    }
 }
